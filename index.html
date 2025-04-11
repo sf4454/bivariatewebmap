@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Tri-County Schools Map</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
+  <link rel="stylesheet" href="https://use.fontawesome.com/releases/v6.7.0/css/all.css">
+  <style>
+    html, body, #map {
+      height: 100%;
+      margin: 0;
+    }
+
+    .map-text {
+      font-family: Arial, sans-serif;
+      font-size: 14px;
+      color: black;
+    }
+
+    .legend {
+      line-height: 22px;
+      background: #d3d3d3;
+      padding: 8px 12px;
+      border-radius: 5px;
+      position: absolute;
+      bottom: 30px;
+      left: 10px;
+      z-index: 999;
+      width: 160px;
+    }
+
+    .legend i {
+      margin-right: 8px;
+    }
+
+    .description {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      background-color: #d3d3d3;
+      padding: 8px;
+      border-radius: 5px;
+      z-index: 999;
+      width: 200px;
+    }
+
+    .map-title {
+      position: absolute;
+      top: 10px;
+      left: 100px;
+      background-color: #d3d3d3;
+      padding: 10px 15px;
+      font-family: Arial, sans-serif;
+      font-size: 18px;
+      font-weight: bold;
+      border-radius: 5px;
+      z-index: 999;
+    }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+  <div class="map-title">Tri-County Schools and Teachers Map</div>
+
+  <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet-ajax/dist/leaflet.ajax.min.js"></script>
+
+  <script>
+    var map = L.map('map').setView([36.1942, -81.7349], 10);
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+
+    map.createPane('countiesPane');
+    map.getPane('countiesPane').style.zIndex = 400;
+
+    map.createPane('schoolsPane');
+    map.getPane('schoolsPane').style.zIndex = 500;
+
+    function getColorByTeachers(num) {
+      return num <= 10 ? '#ffffff' :
+             num <= 30 ? '#aaaaaa' :
+                         '#000000';
+    }
+
+    function getCountyShade(count) {
+      return count >= 8 ? '#023047' :
+             count >= 5 ? '#219ebc' :
+                          '#dbeefc';
+    }
+
+    var schoolCounts = {};
+
+    var schools = new L.GeoJSON.AJAX("assets/tricountyschools.geojson", {
+      pane: 'schoolsPane',
+      pointToLayer: function(feature, latlng) {
+        var num = feature.properties.num_teach || 0;
+        var county = feature.properties.County || feature.properties.county || "Unknown";
+        schoolCounts[county] = (schoolCounts[county] || 0) + 1;
+
+        let iconColor = getColorByTeachers(num);
+
+        return L.marker(latlng, {
+          icon: L.divIcon({
+            className: '',
+            html: `<i class="fas fa-school" style="color:${iconColor}; font-size: 18px;"></i>` ,
+            iconSize: [20, 20],
+            iconAnchor: [10, 10]
+          }),
+          pane: 'schoolsPane'
+        });
+      },
+      onEachFeature: function(feature, layer) {
+        var props = feature.properties;
+        layer.bindPopup(`<strong>${props.school_nam}</strong><br>Town: ${props.Town}<br>Teachers: ${props.num_teach}`);
+      }
+    });
+
+    schools.on('data:loaded', function() {
+      new L.GeoJSON.AJAX("assets/TriCountyArea.geojson", {
+        pane: 'countiesPane',
+        style: function(feature) {
+          var name = feature.properties.COUNTY || feature.properties.County || feature.properties.county || "Unknown";
+          var count = schoolCounts[name] || 0;
+          return {
+            color: "#444",
+            weight: 1,
+            fillOpacity: 0.5,
+            fillColor: getCountyShade(count)
+          };
+        },
+        interactive: false
+      }).addTo(map);
+    });
+
+    schools.addTo(map);
+
+    var legend = L.control({position: 'bottomleft'});
+    legend.onAdd = function(map) {
+      var div = L.DomUtil.create('div', 'legend map-text');
+      div.innerHTML += "<strong>Teachers per School</strong><br>";
+      div.innerHTML += '<i class="fas fa-school" style="color:#ffffff;"></i> 0–10<br>';
+      div.innerHTML += '<i class="fas fa-school" style="color:#aaaaaa;"></i> 11–30<br>';
+      div.innerHTML += '<i class="fas fa-school" style="color:#000000;"></i> 31+<br><br>';
+      div.innerHTML += "<strong>Schools per County</strong><br>";
+      div.innerHTML += '<i style="background:#dbeefc; width:12px; height:12px; display:inline-block;"></i> 1–4<br>';
+      div.innerHTML += '<i style="background:#219ebc; width:12px; height:12px; display:inline-block;"></i> 5–7<br>';
+      div.innerHTML += '<i style="background:#023047; width:12px; height:12px; display:inline-block;"></i> 8–10<br>';
+      return div;
+    };
+    legend.addTo(map);
+
+    L.control.scale({
+      imperial: false,
+      maxWidth: 200,
+      position: 'bottomright'
+    }).addTo(map);
+
+    var description = L.DomUtil.create('div', 'description map-text');
+    description.innerHTML = '<strong>Map Description</strong><br>This map shows the distribution of schools and their respective teacher counts across Ashe, Avery and Watuaga County. Additionally, it shows the number of school per county.';
+    document.body.appendChild(description);
+  </script>
+</body>
+</html>
